@@ -1,0 +1,180 @@
+syntax = "proto3";
+
+package disirpb;
+
+message Version {
+    uint32 major = 1;
+    uint32 minor = 2;
+}
+
+enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    INTERNAL_ERROR = 2;
+}
+
+// Message request
+message RequestUserInfo {
+    string user_agent = 1;
+}
+
+// Message response to the initial UserInfo request.
+message ResponseSystemInfo {
+    bool accepted = 1;
+}
+
+// Each keyval has a designated type
+message ValueType {
+    oneof value {
+        bool boolean_type = 1;
+        bool string_type = 2;
+        bool enum_type = 3;
+        bool integer_type = 4;
+        bool float_type = 5;
+    }
+}
+
+message Value {
+    oneof value {
+        bool boolean_value = 1;
+        string string_value = 2;
+        string enum_value = 3;
+        int64 integer_value = 4;
+        double float_value = 5;
+    }
+}
+
+message Default {
+    uint64 default_id = 1;
+    Version introduced = 2;
+    Value value = 3;
+}
+
+message RequestOpen {
+    string group_id = 1;
+    string entry_id = 2;
+    // If we have previously issues a RequestOpen, but we only got a partial response,
+    // we must re-query to retrieve more chunks.
+    uint64 open_id = 3;
+}
+
+
+message ResponseOpen {
+    uint64 open_id = 1;
+    Version version = 2;
+
+    //
+    // This parameter is only set if the RequestOpen was done against a Mold.
+    //
+    string documentation = 3;
+
+    // The response will contain a flat array of entries.
+    // The receiver can reconstruct the tree nature of this structure
+    // by the parent id references.
+    repeated Section sections = 10;
+    repeated Keyval keyvals = 11;
+}
+
+message Keyval {
+
+    //
+    // The following parameters are shared between Mold and Config
+    //
+
+    uint64 keyval_id = 1;
+    uint64 parent_section_id = 2;
+    string name = 3;
+
+    //
+    // The following parameters are only set for a keyval of type Config
+    //
+
+    Value value = 10;
+
+    //
+    // The following parameters are only set for a keyval of type Mold
+    //
+
+    ValueType type = 20;
+    Version introduced = 21;
+    Version deprecated = 22;
+    string documentation = 23;
+    repeated Default defaults = 24;
+    bool invalid = 25;
+    // TODO: Add restrictions
+}
+
+message Section {
+    //
+    // The following parameters are shared between Mold and Config
+    //
+
+    // Use this identifier to interact with this section
+    uint64 section_id = 1;
+    // This is the section id of our parent. If we are the root, this is set to 0.
+    uint64 parent_section_id = 2;
+    string name = 3;
+
+    //
+    // The following parameters are only set for a section of type Mold
+    //
+
+    Version introduced = 20;
+    Version deprecated = 21;
+    string documentation = 22;
+    // TODO: Add restrictions
+}
+
+//! Return the list of all available group ids.
+message ResponseQueryGroups {
+    repeated string group_ids = 1;
+}
+
+// Return list of all entry ids.
+message ResponseQueryEntryIds {
+    repeated string entry_ids = 1;
+}
+
+// All possible messages exclusively sent from the client to the server.
+message Request {
+    // Identifier that is piggyd back to the client in the response.
+    uint64 command_identifier = 1;
+
+    oneof request {
+        RequestUserInfo user_info = 10;
+        // Query all available groups.
+        bool query_groups = 11;
+        // Query all available mold entries on a given group.
+        string query_mold_entries = 12;
+        // Query all available config entries on a given group.
+        string query_config_entries = 13;
+        // Open a new mold entry.
+        RequestOpen open_mold_entry = 14;
+        // Open a new config entry.
+        RequestOpen open_config_entry = 15;
+        //! Close a previously opend mold by the mold_id in ResponseMoldOpen.
+        uint64 close_mold_entry = 16;
+        //! Close a previously opend config by the config_id in ResponseConfigOpen.
+        uint64 close_config_entry = 17;
+    }
+}
+
+// All possible messages exclusively sent from the server to the client.
+message Response {
+    // Piggy-backed identifier that was received in the Request.
+    uint64 command_identifier = 1;
+    // Status of the Response to the received Request.
+    Status status = 2;
+    // Populated string if the Request operation resulted in a non-OK outcome.
+    string reason = 3;
+
+    oneof response {
+        ResponseSystemInfo system_info = 10;
+        ResponseQueryGroups query_groups = 11;
+        ResponseQueryEntryIds query_mold_entry_ids = 12;
+        ResponseQueryEntryIds query_config_entry_ids = 13;
+        ResponseOpen open_mold_entry = 14;
+        ResponseOpen open_config_entry = 15;
+    }
+}
+
